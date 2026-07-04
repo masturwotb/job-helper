@@ -1,0 +1,22 @@
+{
+  "name": "Трекер выработки — учёт часов и зарплаты",
+  "short_name": "Выработка",
+  "description": "Учёт рабочих часов от выработки и расчёт зарплаты по месяцам",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0710",
+  "theme_color": "#8b5cf6",
+  "categories": ["productivity", "utilities", "finance"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

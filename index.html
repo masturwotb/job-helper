@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Трекер выработки — учёт часов и зарплаты</title>
+
+  <!-- PWA: установка как приложение + обновления по сети -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Выработка" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+
+  <!-- Красивые шрифты с поддержкой кириллицы (работают при наличии интернета, иначе — системный фолбэк) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Живой 3D/particle фон -->
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+  <div class="bg-glow bg-glow--1" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow--2" aria-hidden="true"></div>
+
+  <!-- Экран загрузки -->
+  <div id="splash" class="splash">
+    <div class="splash__logo">
+      <span class="splash__ring"></span>
+      <span class="splash__mark">В</span>
+    </div>
+    <div class="splash__title">Трекер выработки</div>
+  </div>
+
+  <div class="app" id="app">
+    <!-- Боковая навигация -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand__logo">В</div>
+        <div class="brand__text">
+          <span class="brand__name">Выработка</span>
+          <span class="brand__sub">учёт часов и ЗП</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav__item is-active" data-view="dashboard">
+          <span class="nav__icon">◉</span><span class="nav__label">Дашборд</span>
+        </button>
+        <button class="nav__item" data-view="calendar">
+          <span class="nav__icon">▦</span><span class="nav__label">Календарь</span>
+        </button>
+        <button class="nav__item" data-view="salary">
+          <span class="nav__icon">₽</span><span class="nav__label">Зарплата</span>
+        </button>
+        <button class="nav__item" data-view="stats">
+          <span class="nav__icon">▲</span><span class="nav__label">Статистика</span>
+        </button>
+        <button class="nav__item" data-view="settings">
+          <span class="nav__icon">⚙</span><span class="nav__label">Настройки</span>
+        </button>
+      </nav>
+
+      <div class="sidebar__foot">
+        <div class="chip chip--soft" id="app-version-chip">v1.0.0</div>
+      </div>
+    </aside>
+
+    <!-- Основная область -->
+    <main class="main" id="main">
+      <header class="topbar">
+        <div>
+          <h1 class="topbar__title" id="view-title">Дашборд</h1>
+          <p class="topbar__sub" id="view-sub">Обзор твоей работы</p>
+        </div>
+        <div class="topbar__actions">
+          <div class="clock" id="clock">—</div>
+        </div>
+      </header>
+
+      <section class="views" id="views">
+        <!-- Дашборд -->
+        <div class="view is-active" data-view="dashboard">
+          <div class="grid grid--stats" id="dash-stats">
+            <div class="card stat-card tilt">
+              <div class="stat-card__label">Наработано часов</div>
+              <div class="stat-card__value num" id="db-hours" data-suffix=" ч">0</div>
+              <div class="stat-card__hint" id="db-month-hint">текущий месяц</div>
+            </div>
+            <div class="card stat-card tilt">
+              <div class="stat-card__label">Отработано дней</div>
+              <div class="stat-card__value num" id="db-days">0</div>
+              <div class="stat-card__hint" id="db-days-hint">рабочих смен</div>
+            </div>
+            <div class="card stat-card tilt">
+              <div class="stat-card__label">ЗП за месяц</div>
+              <div class="stat-card__value num" id="db-pay" data-suffix=" €">0</div>
+              <div class="stat-card__hint">по текущим настройкам</div>
+            </div>
+          </div>
+
+          <div class="grid grid--dash">
+            <div class="card today-card tilt">
+              <div class="today-card__badge" id="dash-today-date">—</div>
+              <div class="card-title">Сегодня</div>
+              <div class="today-card__body" id="dash-today-body">—</div>
+              <button class="btn btn--primary" id="dash-today-btn">Отметить сегодня</button>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Последние 7 дней</div>
+              <div class="card-sub">Заработок по дням</div>
+              <div class="chart" id="dash-week"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Недавние записи</div>
+            <div class="dash-recent" id="dash-recent"></div>
+          </div>
+        </div>
+
+        <!-- Остальные разделы — заглушки на этап 1 -->
+        <div class="view" data-view="calendar">
+          <div class="card cal">
+            <div class="cal__toolbar">
+              <div class="cal__nav">
+                <button class="iconbtn" id="cal-prev" title="Предыдущий месяц">‹</button>
+                <div class="cal__title" id="cal-title">—</div>
+                <button class="iconbtn" id="cal-next" title="Следующий месяц">›</button>
+              </div>
+              <button class="btn" id="cal-today">Сегодня</button>
+            </div>
+            <div class="cal__month-summary" id="cal-summary"></div>
+            <div class="cal__weekdays" id="cal-weekdays"></div>
+            <div class="cal__grid" id="cal-grid"></div>
+            <div class="cal__legend" id="cal-legend"></div>
+          </div>
+        </div>
+        <div class="view" data-view="salary">
+          <div class="card sal-hero">
+            <div class="cal__nav">
+              <button class="iconbtn" id="sal-prev" title="Предыдущий месяц">‹</button>
+              <div class="cal__title" id="sal-title">—</div>
+              <button class="iconbtn" id="sal-next" title="Следующий месяц">›</button>
+            </div>
+            <div class="sal-hero__total">
+              <div class="sal-hero__label">Итого за месяц</div>
+              <div class="sal-hero__value" id="sal-total">0 €</div>
+              <div class="sal-hero__meta" id="sal-meta">—</div>
+            </div>
+          </div>
+
+          <div class="grid grid--2">
+            <div class="card">
+              <div class="card-title">Разбивка по типам дней</div>
+              <div class="sal-breakdown" id="sal-breakdown"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">Рабочие дни месяца</div>
+              <div class="sal-days" id="sal-days"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Год <span id="sal-year-label"></span></div>
+            <div class="card-sub">Заработок по месяцам</div>
+            <div class="sal-year" id="sal-year"></div>
+            <div class="sal-year__total" id="sal-year-total"></div>
+          </div>
+        </div>
+        <div class="view" data-view="stats">
+          <div class="grid grid--stats" id="stats-cards"></div>
+
+          <div class="card">
+            <div class="card-title">Заработок по месяцам</div>
+            <div class="card-sub">Динамика за всю историю</div>
+            <div class="chart" id="chart-earnings"></div>
+          </div>
+
+          <div class="grid grid--2" style="margin-top:0">
+            <div class="card">
+              <div class="card-title">Распределение дней</div>
+              <div class="card-sub" id="stats-year-sub">За текущий год</div>
+              <div class="chart" id="chart-types"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">Часы по дням недели</div>
+              <div class="card-sub">Когда наработано больше всего</div>
+              <div class="chart" id="chart-weekday"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Наработанные часы по месяцам</div>
+            <div class="card-sub">Сравнение с нормой смен</div>
+            <div class="chart" id="chart-hours"></div>
+          </div>
+        </div>
+        <div class="view" data-view="settings">
+          <div class="card">
+            <div class="card-title">Оплата труда</div>
+            <div class="card-sub">Эти параметры используются во всех расчётах</div>
+            <div class="settings-grid">
+              <label class="field">
+                <span class="field__label">Ставка за час</span>
+                <div class="field__row">
+                  <input class="input" type="number" id="set-rate" min="0" step="0.01" />
+                  <span class="field__unit" id="unit-rate">€</span>
+                </div>
+              </label>
+              <label class="field">
+                <span class="field__label">Оплата за день больничного</span>
+                <div class="field__row">
+                  <input class="input" type="number" id="set-sick" min="0" step="0.5" />
+                  <span class="field__unit">€</span>
+                </div>
+              </label>
+              <label class="field">
+                <span class="field__label">Оплата за день отпуска</span>
+                <div class="field__row">
+                  <input class="input" type="number" id="set-vacation" min="0" step="0.5" />
+                  <span class="field__unit">€</span>
+                </div>
+              </label>
+              <label class="field">
+                <span class="field__label">Норма часов в смене</span>
+                <div class="field__row">
+                  <input class="input" type="number" id="set-planned" min="0" step="0.5" />
+                  <span class="field__unit">ч</span>
+                </div>
+              </label>
+              <label class="field">
+                <span class="field__label">Символ валюты</span>
+                <div class="field__row">
+                  <input class="input" type="text" id="set-currency" maxlength="4" />
+                </div>
+              </label>
+            </div>
+
+            <div class="field" style="margin-top:18px">
+              <span class="field__label">Выходные дни недели</span>
+              <div class="weekday-picker" id="set-weekend"></div>
+            </div>
+
+            <div class="settings-actions">
+              <button class="btn btn--primary" id="set-save">Сохранить настройки</button>
+              <span class="settings-hint" id="set-saved"></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Резервная копия данных</div>
+            <div class="card-sub">Экспортируй все записи в файл или восстанови из него (пригодится для переноса на другое устройство)</div>
+            <div class="settings-actions">
+              <button class="btn" id="set-export">⬇ Экспорт в файл</button>
+              <button class="btn" id="set-import">⬆ Импорт из файла</button>
+              <input type="file" id="set-import-file" accept="application/json" hidden />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Синхронизация (облако)</div>
+            <div class="card-sub">Данные обновляются между ПК и телефоном по общему коду. Как настроить Supabase — см. файл SYNC-SETUP.md. <span id="sync-device"></span></div>
+            <div class="settings-grid">
+              <label class="field">
+                <span class="field__label">URL проекта Supabase</span>
+                <input class="input" type="text" id="sync-url" placeholder="https://xxxx.supabase.co" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span class="field__label">Ключ (anon public)</span>
+                <input class="input" type="password" id="sync-key" placeholder="eyJhbGci..." autocomplete="off" />
+              </label>
+              <label class="field">
+                <span class="field__label">Код синхронизации</span>
+                <input class="input" type="text" id="sync-code" placeholder="общий секретный код" autocomplete="off" />
+              </label>
+            </div>
+            <label class="switch-row">
+              <input type="checkbox" id="sync-auto" />
+              <span>Синхронизировать автоматически после изменений и при запуске</span>
+            </label>
+            <div class="settings-actions">
+              <button class="btn" id="sync-save">Сохранить</button>
+              <button class="btn btn--primary" id="sync-now">Синхронизировать сейчас</button>
+              <span class="settings-hint" id="sync-status"></span>
+            </div>
+          </div>
+
+          <div class="card card--danger">
+            <div class="card-title">Опасная зона</div>
+            <div class="card-sub">Полностью удалить все записи и настройки без возможности восстановления</div>
+            <div class="settings-actions">
+              <button class="btn btn--danger" id="set-wipe">Удалить все данные</button>
+            </div>
+          </div>
+
+          <div class="card about-card">
+            <div class="about-card__logo">В</div>
+            <div class="about-card__info">
+              <div class="card-title" id="about-name">Трекер выработки</div>
+              <div class="about-card__ver">
+                <span class="badge-ver" id="about-version">бета 1.0.0</span>
+                <span class="about-card__build" id="about-build">сборка —</span>
+              </div>
+              <div class="card-sub" id="about-update-status">Проверка обновлений доступна в онлайн-версии</div>
+              <div class="settings-actions" style="margin-top:14px">
+                <button class="btn" id="about-check">Проверить обновления</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Модальное окно редактирования дня -->
+  <div class="modal-backdrop" id="day-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="modal__close" id="modal-close" title="Закрыть">✕</button>
+      <div class="modal__head">
+        <div class="modal__date" id="modal-date">—</div>
+        <div class="modal__sub" id="modal-sub"></div>
+      </div>
+
+      <div class="modal__section">
+        <div class="modal__label">Тип дня</div>
+        <div class="modal__types" id="modal-types"></div>
+      </div>
+
+      <div class="modal__section" id="modal-hours-wrap">
+        <div class="modal__label">Наработано за смену</div>
+        <div class="time-inputs">
+          <div class="time-field">
+            <input class="input" type="number" id="modal-hours" min="0" max="24" step="1" placeholder="0" />
+            <span class="time-field__unit">ч</span>
+          </div>
+          <span class="time-sep">:</span>
+          <div class="time-field">
+            <input class="input" type="number" id="modal-minutes" min="0" max="59" step="1" placeholder="00" />
+            <span class="time-field__unit">мин</span>
+          </div>
+          <div class="time-eq" id="modal-hours-dec">= 0 ч</div>
+        </div>
+        <div class="quick" id="modal-mins-quick"></div>
+        <div class="quick" id="modal-hours-quick"></div>
+      </div>
+
+      <div class="modal__section">
+        <div class="modal__label">Заметка (необязательно)</div>
+        <input class="input" type="text" id="modal-note" placeholder="комментарий к дню" />
+      </div>
+
+      <div class="modal__pay" id="modal-pay"></div>
+
+      <div class="modal__foot">
+        <button class="btn btn--danger" id="modal-delete">Очистить день</button>
+        <button class="btn btn--primary" id="modal-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/version.js"></script>
+  <script src="js/background.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/salary.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/salaryview.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/statsview.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pwa.js"></script>
+</body>
+</html>
